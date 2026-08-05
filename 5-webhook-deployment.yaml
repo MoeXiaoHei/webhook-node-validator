@@ -24,10 +24,9 @@ spec:
       containers:
       - name: webhook
         image: webhook-node-validator:latest
-        # 使用自定义镜像，不需�?command
         env:
         - name: ALLOWED_NODES
-          value: "node-01,node-02"  # 👈 修改为你的白名单节点
+          value: "node-01,node-02"  #修改为你的白名单节点
         - name: PYTHONUNBUFFERED
           value: "1"
         ports:
@@ -45,15 +44,16 @@ spec:
             path: /health
             port: 8443
             scheme: HTTPS
-          initialDelaySeconds: 30          # 👈 增加延迟，让服务有足够时间启�?          periodSeconds: 10
+          initialDelaySeconds: 30
+          periodSeconds: 10       
           timeoutSeconds: 5
-          failureThreshold: 5              # 👈 增加容忍次数
+          failureThreshold: 5              
         readinessProbe:
           httpGet:
             path: /health
             port: 8443
             scheme: HTTPS
-          initialDelaySeconds: 20          # 👈 增加延迟
+          initialDelaySeconds: 20     
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
