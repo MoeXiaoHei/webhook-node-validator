@@ -5,7 +5,7 @@ metadata:
   name: test-allowed-pod
   namespace: my-namespace
 spec:
-  nodeName: example.com227  # 允许的节点
+  nodeName: node-01  # 允许的节点
   containers:
   - name: nginx
     image: nginx:latest
@@ -17,7 +17,7 @@ metadata:
   name: test-denied-pod
   namespace: my-namespace
 spec:
-  nodeName: kg-lab-83-91  # 不允许的节点
+  nodeName: node-03  # 不允许的节点
   containers:
   - name: nginx
     image: nginx:latest
