@@ -23,11 +23,11 @@ spec:
       serviceAccountName: webhook-sa
       containers:
       - name: webhook
-        image: 192.168.81.230:10443/library/webhook-node-validator:latest
-        # 使用自定义镜像，不需要 command
+        image: webhook-node-validator:latest
+        # 使用自定义镜像，不需�?command
         env:
         - name: ALLOWED_NODES
-          value: "hadoop02,example.com227"  # 👈 修改为你的白名单节点
+          value: "node-01,node-02"  # 👈 修改为你的白名单节点
         - name: PYTHONUNBUFFERED
           value: "1"
         ports:
@@ -45,8 +45,7 @@ spec:
             path: /health
             port: 8443
             scheme: HTTPS
-          initialDelaySeconds: 30          # 👈 增加延迟，让服务有足够时间启动
-          periodSeconds: 10
+          initialDelaySeconds: 30          # 👈 增加延迟，让服务有足够时间启�?          periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 5              # 👈 增加容忍次数
         readinessProbe:

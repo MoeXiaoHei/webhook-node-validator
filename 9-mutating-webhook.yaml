@@ -23,6 +23,6 @@ webhooks:
   sideEffects: None
   timeoutSeconds: 5
   failurePolicy: Fail
-  namespaceSelector:
-    matchLabels:
-      webhook-enabled: "true"
+  # namespaceSelector:
+  #   matchLabels:
+  #     webhook-enabled: "true"

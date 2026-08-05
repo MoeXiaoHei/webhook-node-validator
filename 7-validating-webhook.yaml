@@ -24,9 +24,9 @@ webhooks:
   timeoutSeconds: 5
   failurePolicy: Fail  # 如果 Webhook 不可用，拒绝请求（保证安全）
   # 只对特定命名空间生效（通过 namespaceSelector）
-  namespaceSelector:
-    matchLabels:
-      webhook-enabled: "true"
+  # namespaceSelector:
+  #   matchLabels:
+  #     webhook-enabled: "true"
   # Kubernetes v1.28+ 可以使用 matchConditions 精确匹配 ServiceAccount
   # matchConditions:
   # - name: 'serviceaccount-filter'
