@@ -1,0 +1,82 @@
+# Role: 授予对 Pod 的所有操作权限
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-full-control
+  namespace: my-namespace
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["pods/status"]
+  verbs: ["get", "patch", "update"]
+---
+# RoleBinding: 绑定到 ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-full-control-binding
+  namespace: my-namespace
+subjects:
+- kind: ServiceAccount
+  name: multi-node-operator-sa
+  namespace: my-namespace
+roleRef:
+  kind: Role
+  name: pod-full-control
+  apiGroup: rbac.authorization.k8s.io
+---
+# ClusterRole: 允许读取节点信息
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-reader
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+---
+# ClusterRoleBinding: 绑定节点读取权限
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-reader-binding
+subjects:
+- kind: ServiceAccount
+  name: multi-node-operator-sa
+  namespace: my-namespace
+roleRef:
+  kind: ClusterRole
+  name: node-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# ClusterRole: Webhook 需要读取 ValidatingWebhookConfiguration
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webhook-validator
+rules:
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["validatingwebhookconfigurations"]
+  verbs: ["get", "list", "watch"]
+---
+# ClusterRoleBinding: 绑定 Webhook 的权限
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: webhook-validator-binding
+subjects:
+- kind: ServiceAccount
+  name: webhook-sa
+  namespace: my-namespace
+roleRef:
+  kind: ClusterRole
+  name: webhook-validator
+  apiGroup: rbac.authorization.k8s.io

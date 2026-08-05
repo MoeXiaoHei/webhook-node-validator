@@ -1,0 +1,138 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webhook-code
+  namespace: my-namespace
+data:
+  webhook.py: |
+    #!/usr/bin/env python3
+    import json
+    import logging
+    import os
+    import base64
+    from flask import Flask, request, jsonify
+
+    app = Flask(__name__)
+    logging.basicConfig(level=logging.INFO)
+
+    ALLOWED_NODES = os.getenv("ALLOWED_NODES", "node-01,node-02").split(",")
+    ALLOWED_NODES = [node.strip() for node in ALLOWED_NODES if node.strip()]
+
+    @app.route('/health', methods=['GET'])
+    def health():
+        return jsonify({"status": "healthy", "allowed_nodes": ALLOWED_NODES})
+
+    @app.route('/mutate', methods=['POST'])
+    def mutate():
+        """
+        Mutating Webhook: 自动添加 nodeSelector，限制 Pod 到白名单节点
+        """
+        try:
+            review = request.get_json()
+            request_info = review.get('request', {})
+            operation = request_info.get('operation')
+            
+            # 只处理 CREATE 操作
+            if operation != "CREATE":
+                return allow("Not a CREATE operation")
+            
+            pod = request_info.get('object', {})
+            spec = pod.get('spec', {})
+            
+            # 检查是否已有 nodeSelector
+            node_selector = spec.get('nodeSelector', {})
+            
+            # 添加节点选择器（如果用户没有指定）
+            if 'allowed-node' not in node_selector:
+                node_selector['allowed-node'] = 'true'
+                logging.info(f"Added nodeSelector to Pod: {node_selector}")
+            
+            # 检查 nodeName 是否在白名单中
+            node_name = spec.get('nodeName')
+            if node_name and node_name not in ALLOWED_NODES:
+                return deny(f"Node '{node_name}' is not allowed. Allowed nodes: {', '.join(ALLOWED_NODES)}")
+            
+            # 构建 JSON Patch
+            patch = [
+                {
+                    "op": "add",
+                    "path": "/spec/nodeSelector",
+                    "value": node_selector
+                }
+            ]
+            
+            # 编码 patch
+            patch_bytes = json.dumps(patch).encode('utf-8')
+            patch_base64 = base64.b64encode(patch_bytes).decode('utf-8')
+            
+            return jsonify({
+                "apiVersion": "admission.k8s.io/v1",
+                "kind": "AdmissionReview",
+                "response": {
+                    "uid": request_info.get('uid', ''),
+                    "allowed": True,
+                    "patchType": "JSONPatch",
+                    "patch": patch_base64
+                }
+            })
+            
+        except Exception as e:
+            logging.error(f"Error in mutate: {str(e)}")
+            return deny(f"Internal error: {str(e)}")
+
+    @app.route('/validate', methods=['POST'])
+    def validate():
+        """
+        Validating Webhook: 检查 Pod 是否在白名单节点上
+        """
+        try:
+            review = request.get_json()
+            request_info = review.get('request', {})
+            operation = request_info.get('operation')
+            resource = request_info.get('resource', {})
+            
+            if resource.get('resource') != 'pods':
+                return allow("Not a Pod resource")
+            
+            if operation == "DELETE":
+                pod = review['request'].get('oldObject', {})
+            else:
+                pod = review['request'].get('object', {})
+            
+            spec = pod.get('spec', {})
+            node_name = spec.get('nodeName')
+            
+            # 如果指定了 nodeName，检查是否在白名单中
+            if node_name and node_name not in ALLOWED_NODES:
+                return deny(f"Node '{node_name}' is not allowed. Allowed nodes: {', '.join(ALLOWED_NODES)}")
+            
+            return allow("Pod is allowed")
+            
+        except Exception as e:
+            logging.error(f"Error in validate: {str(e)}")
+            return deny(f"Internal error: {str(e)}")
+
+    def allow(message):
+        return jsonify({
+            "apiVersion": "admission.k8s.io/v1",
+            "kind": "AdmissionReview",
+            "response": {
+                "uid": request.json.get('request', {}).get('uid', ''),
+                "allowed": True,
+                "status": {"message": message}
+            }
+        })
+
+    def deny(message):
+        return jsonify({
+            "apiVersion": "admission.k8s.io/v1",
+            "kind": "AdmissionReview",
+            "response": {
+                "uid": request.json.get('request', {}).get('uid', ''),
+                "allowed": False,
+                "status": {"message": message, "code": 403}
+            }
+        })
+
+    if __name__ == '__main__':
+        app.run(host='0.0.0.0', port=8080)

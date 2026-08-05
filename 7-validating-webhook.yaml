@@ -1,0 +1,33 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: node-validation-webhook
+  labels:
+    app: node-validation-webhook
+webhooks:
+- name: node-validation.my-namespace.svc
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: my-namespace
+      path: "/validate"
+      port: 443
+    caBundle: <BASE64_ENCODED_CA_CERT>  # 👈 填入 ca.crt 的 base64 编码
+  rules:
+  - apiGroups: [""]
+    apiVersions: ["v1"]
+    operations: ["CREATE", "UPDATE", "DELETE"]
+    resources: ["pods"]
+    scope: "Namespaced"
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  timeoutSeconds: 5
+  failurePolicy: Fail  # 如果 Webhook 不可用，拒绝请求（保证安全）
+  # 只对特定命名空间生效（通过 namespaceSelector）
+  namespaceSelector:
+    matchLabels:
+      webhook-enabled: "true"
+  # Kubernetes v1.28+ 可以使用 matchConditions 精确匹配 ServiceAccount
+  # matchConditions:
+  # - name: 'serviceaccount-filter'
+  #   expression: "request.userInfo.username == 'system:serviceaccount:my-namespace:multi-node-operator-sa'"

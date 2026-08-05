@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-validation-webhook
+  namespace: my-namespace
+  labels:
+    app: node-validation-webhook
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: node-validation-webhook
+  template:
+    metadata:
+      labels:
+        app: node-validation-webhook
+    spec:
+      serviceAccountName: webhook-sa
+      containers:
+      - name: webhook
+        image: 192.168.81.230:10443/library/webhook-node-validator:latest
+        # 使用自定义镜像，不需要 command
+        env:
+        - name: ALLOWED_NODES
+          value: "hadoop02,example.com227"  # 👈 修改为你的白名单节点
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        ports:
+        - containerPort: 8443
+          name: https
+        volumeMounts:
+        - name: webhook-tls
+          mountPath: /app/certs
+          readOnly: true
+        - name: webhook-code
+          mountPath: /app/webhook.py
+          subPath: webhook.py
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 30          # 👈 增加延迟，让服务有足够时间启动
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5              # 👈 增加容忍次数
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 20          # 👈 增加延迟
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: webhook-tls
+        secret:
+          secretName: webhook-tls
+          defaultMode: 0400
+      - name: webhook-code
+        configMap:
+          name: webhook-code
+          defaultMode: 0755
