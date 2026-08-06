@@ -172,17 +172,17 @@ else
 fi
 
 # 13. 给白名单节点打标签
-print_header "🏷️  Step 13: Labeling Allowed Nodes"
-ALLOWED_NODES=$(kubectl get deployment node-validation-webhook -n my-namespace -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="ALLOWED_NODES")].value}' 2>/dev/null || echo "hadoop02,example.com227,kg-lab-83-91")
-IFS=',' read -ra NODE_ARRAY <<< "$ALLOWED_NODES"
-for node in "${NODE_ARRAY[@]}"; do
-    node=$(echo "$node" | xargs)  # trim whitespace
-    if kubectl label node "$node" allowed-node=true --overwrite 2>/dev/null; then
-        print_success "Node '$node' labeled"
-    else
-        print_warning "Node '$node' not found or cannot be labeled"
-    fi
-done
+# print_header "🏷️  Step 13: Labeling Allowed Nodes"
+# ALLOWED_NODES=$(kubectl get deployment node-validation-webhook -n my-namespace -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="ALLOWED_NODES")].value}' 2>/dev/null || echo "node-01,node-02")
+# IFS=',' read -ra NODE_ARRAY <<< "$ALLOWED_NODES"
+# for node in "${NODE_ARRAY[@]}"; do
+#     node=$(echo "$node" | xargs)  # trim whitespace
+#     if kubectl label node "$node" allowed-node=true --overwrite 2>/dev/null; then
+#         print_success "Node '$node' labeled"
+#     else
+#         print_warning "Node '$node' not found or cannot be labeled"
+#     fi
+# done
 
 # 14. 获取 Token
 print_header "🎫 Step 14: Getting ServiceAccount Token"
