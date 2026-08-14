@@ -26,7 +26,7 @@ spec:
         image: webhook-node-validator:latest
         env:
         - name: ALLOWED_NODES
-          value: "node-01,node-02"  #修改为你的白名单节点
+          value: "node01,node02"  #修改为你的白名单节点
         - name: PYTHONUNBUFFERED
           value: "1"
         ports:

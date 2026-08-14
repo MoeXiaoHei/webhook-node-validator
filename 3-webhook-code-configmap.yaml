@@ -10,13 +10,18 @@ data:
     import logging
     import os
     import base64
+    import random
     from flask import Flask, request, jsonify
 
     app = Flask(__name__)
     logging.basicConfig(level=logging.INFO)
 
-    ALLOWED_NODES = os.getenv("ALLOWED_NODES", "node-01,node-02").split(",")
+    # 从环境变量读取允许的节点列表
+    ALLOWED_NODES = os.getenv("ALLOWED_NODES", "hadoop02,example.com227,kg-lab-83-91").split(",")
     ALLOWED_NODES = [node.strip() for node in ALLOWED_NODES if node.strip()]
+
+    # 需要检查的操作类型
+    POD_OPERATIONS = ["CREATE", "UPDATE", "DELETE"]
 
     @app.route('/health', methods=['GET'])
     def health():
@@ -25,7 +30,7 @@ data:
     @app.route('/mutate', methods=['POST'])
     def mutate():
         """
-        Mutating Webhook: 自动添加 nodeSelector，限制 Pod 到白名单节点
+        Mutating Webhook: 自动注入 nodeSelector，让 Kubernetes 调度器选择节点
         """
         try:
             review = request.get_json()
@@ -38,19 +43,34 @@ data:
             
             pod = request_info.get('object', {})
             spec = pod.get('spec', {})
+            metadata = pod.get('metadata', {})
+            pod_name = metadata.get('name', 'unknown')
+            
+            # 检查是否指定了 nodeName
+            node_name = spec.get('nodeName')
+            
+            logging.info(f"Processing Pod: {pod_name}, nodeName: {node_name}")
+            
+            # 🔑 如果用户指定了 nodeName，检查是否在白名单中
+            if node_name:
+                if node_name not in ALLOWED_NODES:
+                    return deny(f"Node '{node_name}' is not allowed. Allowed nodes: {', '.join(ALLOWED_NODES)}")
+                # 指定了白名单节点，不需要注入 nodeSelector
+                logging.info(f"Pod {pod_name} uses allowed node: {node_name}")
+                return allow(f"Pod scheduled on allowed node: {node_name}")
+            
+            # 🔑 关键修改：如果没有指定 nodeName
+            # 不注入 nodeName，只注入 nodeSelector
+            # 让 Kubernetes 调度器来决定调度到哪个白名单节点
+            logging.info(f"Pod {pod_name} has no nodeName, injecting nodeSelector: node-group=allowed")
             
             # 检查是否已有 nodeSelector
             node_selector = spec.get('nodeSelector', {})
             
             # 添加节点选择器（如果用户没有指定）
-            if 'allowed-node' not in node_selector:
-                node_selector['allowed-node'] = 'true'
-                logging.info(f"Added nodeSelector to Pod: {node_selector}")
-            
-            # 检查 nodeName 是否在白名单中
-            node_name = spec.get('nodeName')
-            if node_name and node_name not in ALLOWED_NODES:
-                return deny(f"Node '{node_name}' is not allowed. Allowed nodes: {', '.join(ALLOWED_NODES)}")
+            if 'node-group' not in node_selector:
+                node_selector['node-group'] = 'allowed'
+                logging.info(f"Injected nodeSelector: {node_selector}")
             
             # 构建 JSON Patch
             patch = [
@@ -91,9 +111,11 @@ data:
             operation = request_info.get('operation')
             resource = request_info.get('resource', {})
             
+            # 只检查 Pod 资源
             if resource.get('resource') != 'pods':
                 return allow("Not a Pod resource")
             
+            # 如果是 DELETE 操作，从 oldObject 获取 Pod 信息
             if operation == "DELETE":
                 pod = review['request'].get('oldObject', {})
             else:
@@ -106,6 +128,23 @@ data:
             if node_name and node_name not in ALLOWED_NODES:
                 return deny(f"Node '{node_name}' is not allowed. Allowed nodes: {', '.join(ALLOWED_NODES)}")
             
+            # 如果没有指定 nodeName，检查是否有 nodeSelector
+            if not node_name:
+                node_selector = spec.get('nodeSelector', {})
+                if not node_selector or 'node-group' not in node_selector:
+                    logging.warning("Pod without nodeName and nodeSelector, will be scheduled by default scheduler")
+                    # 允许通过，调度器会选择节点
+                    return allow("Pod without nodeName and nodeSelector - allowed")
+            
+            # 如果是 UPDATE 操作，检查是否试图修改 nodeName
+            if operation == "UPDATE":
+                old_pod = review['request'].get('oldObject', {})
+                old_spec = old_pod.get('spec', {})
+                old_node = old_spec.get('nodeName')
+                
+                if old_node and old_node != node_name:
+                    return deny(f"Cannot change nodeName from '{old_node}' to '{node_name}' after Pod creation")
+            
             return allow("Pod is allowed")
             
         except Exception as e:
@@ -113,6 +152,7 @@ data:
             return deny(f"Internal error: {str(e)}")
 
     def allow(message):
+        """返回允许的 AdmissionResponse"""
         return jsonify({
             "apiVersion": "admission.k8s.io/v1",
             "kind": "AdmissionReview",
@@ -124,6 +164,7 @@ data:
         })
 
     def deny(message):
+        """返回拒绝的 AdmissionResponse"""
         return jsonify({
             "apiVersion": "admission.k8s.io/v1",
             "kind": "AdmissionReview",

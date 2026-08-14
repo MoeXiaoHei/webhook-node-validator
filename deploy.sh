@@ -171,18 +171,24 @@ else
     print_warning "Failed to label namespace"
 fi
 
-# 13. 给白名单节点打标签
-# print_header "🏷️  Step 13: Labeling Allowed Nodes"
-# ALLOWED_NODES=$(kubectl get deployment node-validation-webhook -n my-namespace -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="ALLOWED_NODES")].value}' 2>/dev/null || echo "node-01,node-02")
-# IFS=',' read -ra NODE_ARRAY <<< "$ALLOWED_NODES"
-# for node in "${NODE_ARRAY[@]}"; do
-#     node=$(echo "$node" | xargs)  # trim whitespace
-#     if kubectl label node "$node" allowed-node=true --overwrite 2>/dev/null; then
-#         print_success "Node '$node' labeled"
-#     else
-#         print_warning "Node '$node' not found or cannot be labeled"
-#     fi
-# done
+# 13. 给白名单节点打标签（用于 nodeSelector）
+print_header "🏷️  Step 13: Labeling Allowed Nodes for Scheduler"
+# 从 Deployment 获取白名单节点列表
+ALLOWED_NODES=$(kubectl get deployment node-validation-webhook -n my-namespace -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="ALLOWED_NODES")].value}' 2>/dev/null || echo "node01,node02,node03")
+print_info "Allowed nodes from config: ${ALLOWED_NODES}"
+
+IFS=',' read -ra NODE_ARRAY <<< "$ALLOWED_NODES"
+for node in "${NODE_ARRAY[@]}"; do
+    node=$(echo "$node" | xargs)  # trim whitespace
+    if [ -n "$node" ]; then
+        # 🔑 关键修改：打上 node-group=allowed 标签（用于 nodeSelector）
+        if kubectl label node "$node" node-group=allowed --overwrite 2>/dev/null; then
+            print_success "Node '$node' labeled with node-group=allowed"
+        else
+            print_warning "Node '$node' not found or cannot be labeled"
+        fi
+    fi
+done
 
 # 14. 获取 Token
 print_header "🎫 Step 14: Getting ServiceAccount Token"
@@ -225,16 +231,16 @@ echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━
 
 echo -e "\n${BOLD}${WHITE}📝 Test Commands:${NC}"
 echo ""
-print_test_cmd "# 1️⃣  不指定 nodeName，自动调度到白名单节点"
+print_test_cmd "# 1️⃣  不指定 nodeName，自动调度到白名单节点（由 K8s 调度器选择）"
 echo -e "${GREEN}kubectl run test-pod --image=nginx --restart=Never -n my-namespace --token=${TOKEN}${NC}"
 
 echo ""
 print_test_cmd "# 2️⃣  指定 nodeName（必须在白名单中）"
-echo -e "${GREEN}kubectl run test-pod-2 --image=nginx --restart=Never -n my-namespace --overrides='{\"spec\":{\"nodeName\":\"node-01\"}}' --token=${TOKEN}${NC}"
+echo -e "${GREEN}kubectl run test-pod-2 --image=nginx --restart=Never -n my-namespace --overrides='{\"spec\":{\"nodeName\":\"node01\"}}' --token=${TOKEN}${NC}"
 
 echo ""
 print_test_cmd "# 3️⃣  指定非白名单节点（会被拒绝）"
-echo -e "${GREEN}kubectl run test-pod-3 --image=nginx --restart=Never -n my-namespace --overrides='{\"spec\":{\"nodeName\":\"node-02\"}}' --token=${TOKEN}${NC}"
+echo -e "${GREEN}kubectl run test-pod-3 --image=nginx --restart=Never -n my-namespace --overrides='{\"spec\":{\"nodeName\":\"node-04\"}}' --token=${TOKEN}${NC}"
 
 echo ""
 print_test_cmd "# 4️⃣  查看 Pod 调度到哪个节点"

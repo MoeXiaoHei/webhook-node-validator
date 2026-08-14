@@ -74,14 +74,14 @@ kubectl label namespace my-namespace webhook-enabled- 2>/dev/null && print_succe
 print_header "📋 Deleting MutatingWebhookConfiguration"
 kubectl delete mutatingwebhookconfiguration node-selector-webhook --ignore-not-found=true 2>/dev/null && print_success "MutatingWebhookConfiguration deleted" || print_info "Not found, skipping"
 
-# 10. 删除节点标签
+# 10. 删除节点标签（移除两种标签：旧的 allowed-node 和新的 node-group）
 print_header "🏷️  Removing Node Labels"
-ALLOWED_NODES="hadoop02 example.com227 kg-lab-83-91"
+ALLOWED_NODES="node01 node02"
 for node in $ALLOWED_NODES; do
-    kubectl label node "$node" allowed-node- 2>/dev/null && print_success "Label removed from $node" || print_info "Label not found on $node"
+    kubectl label node "$node" node-group- 2>/dev/null && print_success "Label 'node-group' removed from $node" || print_info "Label 'node-group' not found on $node"
 done
 
-# 11. 询问是否删除命名空间（修复版）
+# 11. 询问是否删除命名空间
 print_header "🗑️  Namespace Cleanup"
 echo -e -n "${YELLOW}❓ Do you want to delete the entire namespace 'my-namespace'? (y/N): ${NC}"
 read -n 1 -r
@@ -92,7 +92,7 @@ else
     print_info "Namespace preserved. You can delete it later with: ${WHITE}kubectl delete namespace my-namespace${NC}"
 fi
 
-# 12. 删除证书文件（修复版）
+# 12. 删除证书文件
 print_header "📜 Certificate Files Cleanup"
 echo -e -n "${YELLOW}❓ Do you want to delete the 'certs' directory? (y/N): ${NC}"
 read -n 1 -r
