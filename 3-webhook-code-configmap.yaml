@@ -17,7 +17,7 @@ data:
     logging.basicConfig(level=logging.INFO)
 
     # 从环境变量读取允许的节点列表
-    ALLOWED_NODES = os.getenv("ALLOWED_NODES", "hadoop02,example.com227,kg-lab-83-91").split(",")
+    ALLOWED_NODES = os.getenv("ALLOWED_NODES", "node01,node02").split(",")
     ALLOWED_NODES = [node.strip() for node in ALLOWED_NODES if node.strip()]
 
     # 需要检查的操作类型
